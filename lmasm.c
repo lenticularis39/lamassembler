@@ -337,7 +337,7 @@ MKINST(JSR) {
 
 MKINST(LDA) {
     // Load Accumulator with Memory.
-    return ip_mem_to_acc(ac, 0xA0, opr);
+    return ip_mem_to_acc(am, 0xA0, opr);
 }
 
 MKINST(LDX) {
@@ -376,6 +376,137 @@ MKINST(LSR) {
     // Shift One Bit Right (Memory or Accumulator).
     return ip_mem_or_acc(am, 0x40, opr);
 }
+
+MKINST(NOP) {
+    // No Operation.
+    return make_instr(IMPL, 0xEA, 0);
+}
+
+MKINST(ORA) {
+    // OR Memory with Accumulator.
+    return ip_mem_to_acc(am, 0x00, opr);
+}
+
+MKINST(PHA) {
+    // Push Accumulator on Stack.
+    return make_instr(IMPL, 0x48, 0);
+}
+
+MKINST(PHP) {
+    // Push Processor Status on Stack.
+    return make_instr(IMPL, 0x08, 0);
+}
+
+MKINST(PLA) {
+    // Pull Accumulator from Stack.
+    return make_instr(IMPL, 0x68, 0);
+}
+
+MKINST(PLP) {
+    // Push Processor Status from Stack.
+    return make_instr(IMPL, 0x28, 0);
+}
+
+MKINST(ROL) {
+    // Rotate One Bit Left (Memory or Accumulator).
+    return ip_mem_or_acc(am, 0x20, opr);
+}
+
+MKINST(ROR) {
+    // Rotate One Bit Right (Memory or Accumulator).
+    return ip_mem_or_acc(am, 0x60, opr);
+}
+
+MKINST(RTI) {
+    // Return from Interrupt.
+    return make_instr(IMPL, 0x40, opr);
+}
+
+MKINST(RTS) {
+    // Return from Subroutine.
+    return make_instr(IMPL, 0x60, opr);
+}
+
+MKINST(SBC) {
+    // Subtract Memory from Accumulator with Borrow.
+    return ip_mem_to_acc(am, 0xE0, opr);
+}
+
+MKINST(SEC) {
+    // Set Carry Flag.
+    return make_instr(IMPL, 0x38, opr);
+}
+
+
+MKINST(SED) {
+    // Set Decimal Flag.
+    return make_instr(IMPL, 0xF8, opr);
+}
+
+MKINST(SEI) {
+    // Set Interrupt Disable Status
+    return make_instr(IMPL, 0x78, opr);
+}
+
+MKINST(STA) {
+    // Store Accumulator In Memory.
+    return ip_mem_to_acc(am, 0x80, opr);
+}
+
+MKINST(STX) {
+    // Store Index X in Memory.
+    switch (am) {
+        case ZPG:
+            return make_instr(am, 0x86, opr);
+        case ZPG_Y:
+            return make_instr(am, 0x96, opr);
+        case HHLL:
+            return make_instr(am, 0x8E, opr);
+    }
+}
+
+MKINST(STY) {
+    // Store Index Y in Memory.
+    switch (am) {
+        case ZPG:
+            return make_instr(am, 0x84, opr);
+        case ZPG_Y:
+            return make_instr(am, 0x94, opr);
+        case HHLL:
+            return make_instr(am, 0x8C, opr);
+    }
+}
+
+MKINST(TAX) {
+    // Transfer Accumulator to Index X.
+    return make_instr(IMPL, 0xAA, opr);
+}
+
+MKINST(TAY) {
+    // Transfer Accumulator to Index Y.
+    return make_instr(IMPL, 0xA8, opr);
+}
+
+MKINST(TSX) {
+    // Transfer Stack Pointer to Index X.
+    return make_instr(IMPL, 0xBA, opr);
+}
+
+MKINST(TXA) {
+    // Transfer Index X to Accumulator.
+    return make_instr(IMPL, 0x8A, opr);
+}
+
+MKINST(TXS) {
+    // Transfer Index X to Stack Register.
+    return make_instr(IMPL, 0x9A, opr);
+}
+
+MKINST(TYA) {
+    // Transfer Index Y to Accumulator.
+    return make_instr(IMPL, 0x98, opr);
+}
+
 
 // End of instruction implementation.
 
