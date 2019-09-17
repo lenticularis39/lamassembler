@@ -51,7 +51,7 @@ enum addr_mode {
     IMPL,   // Implied (from opcode)
     INDR,   // Indirect - word (two bytes) residing at the addr. in arg.
     INDR_X, // ^ - word residing at (zeroext addr. in arg. + X) without carry
-    INDR_Y, // ^ - word residing at zeroext addr. in arg. incremented by Y 
+    INDR_Y, // ^ - word residing at zeroext addr. in arg. incremented by Y
             // with carry
     REL,    // Address relative to program counter (PC) + signed (byte) argument
     ZPG,    // Address specified in argument (zeroext)
@@ -99,7 +99,7 @@ struct instr make_instr(enum addr_mode am, unsigned char opcode, unsigned opr) {
             res.len = 3;
             break;
     }
-    
+
     return res;
 }
 
@@ -291,6 +291,92 @@ MKINST(DEY) {
     return make_instr(am, 0x88, opr);
 }
 
+MKINST(EOR) {
+    // Exclusive-OR Memory with Accumulator.
+    return ip_mem_to_acc(am, 0x40, opr);
+}
+
+MKINST(INC) {
+    // Increment Memory by One.
+    switch (am) {
+        case ZPG:
+            return make_instr(am, 0xE6, opr);
+        case ZPG_X:
+            return make_instr(am, 0xF6, opr);
+        case HHLL:
+            return make_instr(am, 0xEE, opr);
+        case HHLL_X:
+            return make_instr(am, 0xFE, opr);
+    }
+}
+
+MKINST(INX) {
+    // Increment Index X by One.
+    return ip_mem_to_acc(am, 0xE8, opr);
+}
+
+MKINST(INY) {
+    // Increment Index Y by One.
+    return ip_mem_to_acc(am, 0xC8, opr);
+}
+
+MKINST(JMP) {
+    // Jump to New Location.
+    switch (am) {
+        case HHLL:
+            return make_instr(am, 0x4C, opr);
+        case INDR:
+            return make_instr(am, 0x6C, opr);
+    }
+}
+
+MKINST(JSR) {
+    // Jump to New Locaino Saving Return Address.
+    return make_instr(HHLL, 0x20, opr);
+}
+
+MKINST(LDA) {
+    // Load Accumulator with Memory.
+    return ip_mem_to_acc(ac, 0xA0, opr);
+}
+
+MKINST(LDX) {
+    // Load X with Memory.
+    switch (am) {
+        case IMM:
+            return make_instr(am, 0xA2, opr);
+        case ZPG:
+            return make_instr(am, 0xA6, opr);
+        case ZPG_Y:
+            return make_instr(am, 0xB6, opr);
+        case HHLL:
+            return make_instr(am, 0xAE, opr);
+        case HHLL_Y:
+            return make_instr(am, 0xBE, opr);
+    }
+}
+
+MKINST(LDY) {
+    // Load Y with Memory.
+    switch (am) {
+        case IMM:
+            return make_instr(am, 0xA0, opr);
+        case ZPG:
+            return make_instr(am, 0xA4, opr);
+        case ZPG_X:
+            return make_instr(am, 0xB4, opr);
+        case HHLL:
+            return make_instr(am, 0xAC, opr);
+        case HHLL_X:
+            return make_instr(am, 0xBC, opr);
+    }
+}
+
+MKINST(LSR) {
+    // Shift One Bit Right (Memory or Accumulator).
+    return ip_mem_or_acc(am, 0x40, opr);
+}
+
 // End of instruction implementation.
 
 int main(int argc, char **argv) {
@@ -301,7 +387,7 @@ int main(int argc, char **argv) {
 
     input_file = argv[1];
     output_file = argv[2];
-    
+
     input_fh = fopen(input_file, "r");
     output_fh = fopen(output_file, "w");
 }
