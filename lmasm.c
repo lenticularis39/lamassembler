@@ -59,11 +59,10 @@ enum addr_mode {
     ZPG_Y   // ^ incremented by Y (without carry)
 };
 
-typedef unsigned int operation;
 
 struct instr {
     // Instruction structure.
-    operation op; // Operation + arguments (aligned to the right).
+    char op[3]; // Operation + arguments (aligned to the right).
     unsigned char len; // Length in bytes (1, 2 or 3).
 };
 
@@ -77,7 +76,7 @@ struct instr make_instr(enum addr_mode am, unsigned char opcode, unsigned opr) {
 
     switch (am) {
         case IMPL:
-            res.op = opcode;
+            res.op[0] = opcode;
             res.len = 1;
             break;
         case ACC:
@@ -88,14 +87,17 @@ struct instr make_instr(enum addr_mode am, unsigned char opcode, unsigned opr) {
         case REL:
         case INDR_X:
         case INDR_Y:
-            res.op = opcode << 8 | opr;
+            res.op[0] = opcode;
+            res.op[1] = opr;
             res.len = 2;
             break;
         case INDR:
         case HHLL:
         case HHLL_X:
         case HHLL_Y:
-            res.op = opcode << 16 | opr;
+            res.op[0] = opcode;
+            res.op[1] = opr >> 8;
+            res.op[2] = opr;
             res.len = 3;
             break;
     }
@@ -507,8 +509,15 @@ MKINST(TYA) {
     return make_instr(IMPL, 0x98, opr);
 }
 
-
 // End of instruction implementation.
+
+// File system functions.
+
+void write_instr(struct instr i, FILE *f) {
+    fwrite((const void *) i.op, i.len, 1, f);
+}
+
+// End of file system functions.
 
 int main(int argc, char **argv) {
     if (argc != 3) {
@@ -521,4 +530,10 @@ int main(int argc, char **argv) {
 
     input_fh = fopen(input_file, "r");
     output_fh = fopen(output_file, "w");
+
+    write_instr(i_LDA(IMM, 0x00), output_fh);
+    write_instr(i_JMP(HHLL, 0x8000), output_fh);
+
+    fclose(input_fh);
+    fclose(output_fh);
 }
