@@ -35,6 +35,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 char *output_file, *input_file;
 FILE *output_fh, *input_fh;
@@ -513,11 +514,49 @@ MKINST(TYA) {
 
 // File system functions.
 
+int cur_pos = 0; // Current position (in bytes) in the assembled output.
+
 void write_instr(struct instr i, FILE *f) {
     fwrite((const void *) i.op, i.len, 1, f);
+    cur_pos += i.len;
 }
 
 // End of file system functions.
+
+// Helper functions.
+
+void h_org(int pos) {
+    // Organization function.
+    // Corresponds to: .org <pos>.
+    // Meaning: set the current position (the beginning of the program) to pos.
+    cur_pos = pos;
+}
+
+struct {
+    const char *name;
+    int pos;
+} label_arr[10000]; int label_arr_c = 0;
+
+void h_label(const char *label) {
+    // Makes a label.
+    // Corresponds to: <label>:.
+    label_arr[label_arr_c++].name = label;
+    label_arr[label_arr_c - 1].pos = cur_pos;
+}
+
+int h_get_label(const char *label) {
+    // Looks up a label in the label table.
+    // Corresponds to: <label>:.
+    for (int i = 0; i < label_arr_c; i++) {
+        if (strcmp(label, label_arr[i].name) != 0)
+            continue;
+        return label_arr[i].pos;
+    }
+    fprintf(stderr, "lmasm: warning: label %s is not defined\n", label);
+    return 0;
+}
+
+// End of helper functions.
 
 int main(int argc, char **argv) {
     if (argc != 3) {
@@ -531,8 +570,10 @@ int main(int argc, char **argv) {
     input_fh = fopen(input_file, "r");
     output_fh = fopen(output_file, "w");
 
+    h_org(0x0080);
     write_instr(i_LDA(IMM, 0x00), output_fh);
-    write_instr(i_JMP(HHLL, 0x8000), output_fh);
+    h_label("loop");
+    write_instr(i_JMP(HHLL, h_get_label("loop")), output_fh);
 
     fclose(input_fh);
     fclose(output_fh);
