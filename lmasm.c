@@ -521,6 +521,11 @@ void write_instr(struct instr i, FILE *f) {
     cur_pos += i.len;
 }
 
+void write_data(const void *data, int len, FILE *f) {
+    fwrite(data, len, 1, f);
+    cur_pos += len;
+}
+
 // End of file system functions.
 
 // Helper functions.
@@ -557,6 +562,12 @@ int h_get_label(const char *label) {
 }
 
 // End of helper functions.
+
+// Parser functions.
+
+
+
+// End of parser functions.
 
 int main(int argc, char **argv) {
     if (argc != 3) {
