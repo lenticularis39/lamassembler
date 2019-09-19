@@ -40,6 +40,8 @@
 char *output_file, *input_file;
 FILE *output_fh, *input_fh;
 
+typedef int bool;
+
 // Instruction implementation.
 
 enum addr_mode {
@@ -538,14 +540,19 @@ void h_org(int pos) {
 }
 
 struct {
-    const char *name;
+    char *name;
     int pos;
 } label_arr[10000]; int label_arr_c = 0;
 
 void h_label(const char *label) {
     // Makes a label.
     // Corresponds to: <label>:.
-    label_arr[label_arr_c++].name = label;
+    // Note: a copy of the label is made, because it is not ensured that the
+    // string that the arguments points will survive outside this function.
+    printf("Recording label: %s\n", label);
+    char *label_perm = calloc(sizeof(char), strlen(label));
+    strcpy(label_perm, label);
+    label_arr[label_arr_c++].name = label_perm;
     label_arr[label_arr_c - 1].pos = cur_pos;
 }
 
@@ -557,15 +564,85 @@ int h_get_label(const char *label) {
             continue;
         return label_arr[i].pos;
     }
-    fprintf(stderr, "lmasm: warning: label %s is not defined\n", label);
-    return 0;
+    fprintf(stderr, "lmasm: error: label %s is not defined\n", label);
+    exit(1);
 }
 
 // End of helper functions.
 
 // Parser functions.
 
+int line_n; // Used only for the purpose of debugging messages.
 
+void p_line(const char *line) {
+    // First remove any comments
+    int len = strlen(line);
+    char *line2 = calloc(sizeof(char), len + 1);
+    bool inside_quotes = 0;
+
+    // Remove comments.
+    // Note: here we want to copy over the zero character if the line is
+    // complete (i.e. not ended with a comment), that's why we use len + 1
+    // instead of len as the for limit.
+    for (int i = 0; i < (len + 1); i++) {
+        if (line[i] == '"' || line[i] == '\'' &&
+                (i == 0 || line[i - 1] != '\\'))
+            inside_quotes = !inside_quotes;
+        if (line[i] == ';' && !inside_quotes) {
+            line2[i] = '\0';
+            break;
+        } else
+            line2[i] = line[i];
+    }
+
+    if (inside_quotes) {
+        fprintf(stderr, "lmasm: error: line %d: wrong quote pairing\n", line_n);
+        exit(1);
+    }
+
+    // Then process any labels on the line. (Also skip any whitespace.)
+    char *label = calloc(sizeof(char), len + 1);
+    int label_index = 0;
+    char *line3 = calloc(sizeof(char), len + 1);
+    int line3_index = 0;
+
+    for (int i = 0; i < len; i++) {
+        if (line2[i] == '"' || line2[i] == '\'' &&
+                (i == 0 || line2[i - 1] != '\\'))
+            inside_quotes = !inside_quotes;
+        if (line2[i] == ' ' || line2[i] == '\t' && !inside_quotes)
+            // This assembler does not need whitespace (besides end of line
+            // characters), therefore they are dropped.
+            continue;
+        if (line2[i] == ':' && !inside_quotes) {
+            // End label by zero to be processed correctly by the string library
+            // functions and reset the loading index to zero.
+            label[label_index] = '\0';
+            label_index = 0;
+            // Write label into array.
+            h_label(label);
+            // We don't want to include the label into line3, therefore shift
+            // the line3 index back.
+            line3_index -= strlen(label);
+        } else {
+            label[label_index++] = line2[i];
+            line3[line3_index++] = line2[i];
+        }
+    }
+
+    printf("%s\n", line3);
+
+    free(line2);
+    free(line3);
+    free(label);
+}
+
+void p_cleanup() {
+    // Label names are generated dynamically - free the memory.
+    for (int i = 0; i < label_arr_c; i++) {
+        free(label_arr[i].name);
+    }
+}
 
 // End of parser functions.
 
@@ -581,11 +658,9 @@ int main(int argc, char **argv) {
     input_fh = fopen(input_file, "r");
     output_fh = fopen(output_file, "w");
 
-    h_org(0x0080);
-    write_instr(i_LDA(IMM, 0x00), output_fh);
-    h_label("loop");
-    write_instr(i_JMP(HHLL, h_get_label("loop")), output_fh);
+    p_line("Label: Label2: instruction ';hi:hello;' ; some comment");
 
     fclose(input_fh);
     fclose(output_fh);
+    p_cleanup();
 }
