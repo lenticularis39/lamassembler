@@ -539,6 +539,7 @@ void h_org(int pos) {
     // Organization function.
     // Corresponds to: .org <pos>.
     // Meaning: set the current position (the beginning of the program) to pos.
+    printf("Org: %d\n", pos);
     cur_pos = pos;
 }
 
@@ -571,11 +572,43 @@ int h_get_label(const char *label) {
     exit(1);
 }
 
+int h_number_parser(const char *input) {
+    int output;
+    if (strlen(input) >= 2 && input[0] == '0' && input[1] == 'x') {
+        // Numbers beginning with 0x are treated as hexadecimal.
+        if (!sscanf(input + 2, "%x", &output)) {
+            fprintf(stderr, "lmasm: error: invalid number: %s\n", input);
+            exit(1);
+        }
+        return output;
+    }
+    if (strlen(input) >= 2 && input[0] == '0') {
+        // Numbers beginning with 0 are treated as octal.
+        if (!sscanf(input, "%o", &output)) {
+            fprintf(stderr, "lmasm: error: invalid number: %s\n", input);
+            exit(1);
+        }
+        return output;
+    }
+}
+
 // End of helper functions.
 
 // Parser functions.
 
 int line_n; // Used only for the purpose of debugging messages.
+
+void p_dir_org(int argc, char **argv) {
+    // Parser function for .org directive.
+    if (argc != 1) {
+        fprintf(stderr, 
+                "lmasm: error: incorrect number of arguments to .org\n");
+        exit(1);
+    }
+
+    // Call the appropriate helper functions. (Parse the argument first.)
+    h_org(h_number_parser(argv[0]));
+}
 
 void p_directive_distribution(char *directive, int argc, char **argv) {
     // Calls the appropriate function representing the directive and passes it
@@ -583,6 +616,12 @@ void p_directive_distribution(char *directive, int argc, char **argv) {
     printf("Processing special directive: %s\n", directive);
     for (int i = 0; i < argc; i++) {
         printf("Argument number %d: %s\n", i, argv[i]);
+    }
+    
+    if (strcmp(directive, ".data") == 0) {
+        //p_dir_data(argc, argv);
+    } else if (strcmp(directive, ".org") == 0) {
+        p_dir_org(argc, argv);
     }
 }
 
@@ -676,7 +715,7 @@ void p_line(const char *line) {
         int argc = 0;
         char **argv = calloc(sizeof(char *), PARAMETER_MAXIMUM);
         // Index of the end of the line.
-        const int eol = strlen(line3) - 1;
+        const int eol = strlen(line3);
         while (i < eol) {
             // First skip any initial spaces.
             while (i < eol && (line3[i] == ' ' || line3[i] == '\t'))
@@ -743,6 +782,7 @@ int main(int argc, char **argv) {
     output_fh = fopen(output_file, "w");
 
     p_line("Label: Label2: .directive ';hi:hello;', neco    , 'neco_jineho, shit' ; some comment 'blablabla''");
+    p_line("Label3: .org 0xff");
 
     fclose(input_fh);
     fclose(output_fh);
