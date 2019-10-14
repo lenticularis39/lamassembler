@@ -41,6 +41,9 @@ char *output_file, *input_file;
 FILE *output_fh, *input_fh;
 
 typedef int bool;
+// Maximum for operation parameters (applies both to instruction and
+// directives).
+#define PARAMETER_MAXIMUM 100
 
 // Instruction implementation.
 
@@ -574,8 +577,16 @@ int h_get_label(const char *label) {
 
 int line_n; // Used only for the purpose of debugging messages.
 
+void p_directive_distribution(char *directive, int argc, char **argv) {
+    // Calls the appropriate function representing the directive and passes it
+    // the arguments.
+    printf("Processing special directive: %s\n", directive);
+    for (int i = 0; i < argc; i++) {
+        printf("Argument number %d: %s\n", i, argv[i]);
+    }
+}
+
 void p_line(const char *line) {
-    // First remove any comments
     int len = strlen(line);
     char *line2 = calloc(sizeof(char), len + 1);
     bool inside_quotes = 0;
@@ -603,6 +614,7 @@ void p_line(const char *line) {
     // Then process any labels on the line. (Also skip any whitespace.)
     char *label = calloc(sizeof(char), len + 1);
     int label_index = 0;
+    int skip_index = 0;
     char *line3 = calloc(sizeof(char), len + 1);
     int line3_index = 0;
 
@@ -610,10 +622,6 @@ void p_line(const char *line) {
         if (line2[i] == '"' || line2[i] == '\'' &&
                 (i == 0 || line2[i - 1] != '\\'))
             inside_quotes = !inside_quotes;
-        if (line2[i] == ' ' || line2[i] == '\t' && !inside_quotes)
-            // This assembler does not need whitespace (besides end of line
-            // characters), therefore they are dropped.
-            continue;
         if (line2[i] == ':' && !inside_quotes) {
             // End label by zero to be processed correctly by the string library
             // functions and reset the loading index to zero.
@@ -623,14 +631,90 @@ void p_line(const char *line) {
             h_label(label);
             // We don't want to include the label into line3, therefore shift
             // the line3 index back.
-            line3_index -= strlen(label);
+            line3_index -= skip_index;
+            skip_index = 0;
         } else {
-            label[label_index++] = line2[i];
+            if (line2[i] != ' ' && line2[i] != '\t' && !inside_quotes) {
+                label[label_index++] = line2[i];
+            }
+            skip_index++;
             line3[line3_index++] = line2[i];
         }
     }
 
-    printf("%s\n", line3);
+    // Now we have to check if the line represent a special assembler directive.
+    // This is checked by looking at the first character (all special directives
+    // begin with a dot).
+    // Note: we reuse the memory for line2 (which won't be used again) to
+    // contain the directive.
+    char *directive = line2;
+    int directive_i = 0;
+    int start = -1;
+    for (int i = 0; i < strlen(line3); i++) {
+        // Skip any initial spaces.
+        if (line3[i] != ' ' && line3[i] != '\t') {
+            start = i;
+            break;
+        }
+    }
+    if (start == -1) {
+        // Empty line.
+        return;
+    }
+    if (line3[start] == '.') {
+        // Special directive detected. Load its name and its parameters.
+        int i = start;
+        for (; i < strlen(line3); i++) {
+            if (line3[i] == ' ' || line3[i] == '\t') {
+                start = i;
+                directive[directive_i] = '\0';
+                break;
+            }
+            directive[directive_i++] = line3[i];
+        }
+        // Now load parameters until the end of the line is reached.
+        int argc = 0;
+        char **argv = calloc(sizeof(char *), PARAMETER_MAXIMUM);
+        // Index of the end of the line.
+        const int eol = strlen(line3) - 1;
+        while (i < eol) {
+            // First skip any initial spaces.
+            while (i < eol && (line3[i] == ' ' || line3[i] == '\t'))
+                i++;
+            if (i == eol)
+                // We reached the end of the line (this "argument" contained
+                // only whitespace).
+                break;
+            // Then load the paramterer while looking for the separator (in this
+            // case a comma).
+            // Note: Again, "inside quotes" mechanism has to be used to avoid
+            // counting the separator inside a literal.
+            argv[argc] = calloc(sizeof(char), strlen(line3) + 1);
+            int argv_i = 0;
+            for (; i < eol; i++) {
+                if (line3[i] == '"' || line3[i] == '\'' &&
+                        (i == 0 || line3[i - 1] != '\\'))
+                    inside_quotes = !inside_quotes;
+                if (line3[i] == ',' && !inside_quotes) {
+                    break;
+                }
+                argv[argc][argv_i++] = line3[i];
+            }
+            // End the parameter with a zero and move the index to enable their
+            // next argument to be loaded. (Otherwise the next iteration of the
+            // cycle would see the comma and load an empty argument).
+            argv[argc][argv_i] = '\0';
+            ++argc; ++i;
+        }
+        // Process the directive and free argv.
+        // Note: we do not need to free the variable directive, because it uses
+        // the same address space as line2, which is freed at the end of the
+        // function.
+        p_directive_distribution(directive, argc, argv);
+        for (int j = 0; i < argc; i++)
+            free(argv[j]);
+        free(argv);
+    }
 
     free(line2);
     free(line3);
@@ -658,7 +742,7 @@ int main(int argc, char **argv) {
     input_fh = fopen(input_file, "r");
     output_fh = fopen(output_file, "w");
 
-    p_line("Label: Label2: instruction ';hi:hello;' ; some comment");
+    p_line("Label: Label2: .directive ';hi:hello;', neco    , 'neco_jineho, shit' ; some comment 'blablabla''");
 
     fclose(input_fh);
     fclose(output_fh);
