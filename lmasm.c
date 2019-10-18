@@ -102,8 +102,8 @@ struct instr make_instr(enum addr_mode am, unsigned char opcode, unsigned opr) {
         case HHLL_X:
         case HHLL_Y:
             res.op[0] = opcode;
-            res.op[1] = opr >> 8;
-            res.op[2] = opr;
+            res.op[1] = opr;
+            res.op[2] = opr >> 8;
             res.len = 3;
             break;
     }
@@ -526,8 +526,8 @@ void write_instr(struct instr i, FILE *f) {
     cur_pos += i.len;
 }
 
-void write_data(const void *data, int len, FILE *f) {
-    fwrite(data, len, 1, f);
+void write_data(const void *data, int len) {
+    fwrite(data, len, 1, output_fh);
     cur_pos += len;
 }
 
@@ -572,8 +572,47 @@ int h_get_label(const char *label) {
     exit(1);
 }
 
+int h_is_number(const char *input) {
+    // Returns 1 if the input string represents a number.
+    // Note: a character literal is also treated as a number. Floating point
+    // number is not, since the 6502 can't process floats.
+    if (strlen(input) >= 2 && input[0] == '0' && input[1] == 'x') {
+        // Hexadecimal number prefix. Check whether all digits are in the range
+        // 0-9 and a-f (A-F).
+        for (int i = 2; i < strlen(input); i++) {
+            if (!((input[i] >= 'a' && input[i] <= 'f') ||
+                  (input[i] >= 'A' && input[i] <= 'F') ||
+                  (input[i] >= '0' && input[i] <= '9')))
+                return 0;
+        }
+        return 1;
+    } else if (strlen(input) >= 2 && input[0] == '0') {
+        // Octal number. Check whether all digits are from 0 to 7.
+        for (int i = 1; i < strlen(input); i++) {
+            if (!(input[i] >= '0' && input[i] <= '7'))
+                return 0;
+        }
+        return 1;
+    } else if (strlen(input) == 3 && input[0] == '\'' && input[2] == '\'') {
+        return 1;
+    } else {
+        // Decimal number.
+        for (int i = 1; i < strlen(input); i++) {
+            if (!(input[i] >= '0' && input[i] <= '9'))
+                return 0;
+        }
+        return 1;
+    }
+    return 0;
+}
+
 int h_number_parser(const char *input) {
     int output;
+    if (!h_is_number(input)) {
+        fprintf(stderr, "lmasm: error: number expected, got %s instead\n",
+                input);
+        exit(1);
+    }
     if (strlen(input) >= 2 && input[0] == '0' && input[1] == 'x') {
         // Numbers beginning with 0x are treated as hexadecimal.
         if (!sscanf(input + 2, "%x", &output)) {
@@ -590,6 +629,27 @@ int h_number_parser(const char *input) {
         }
         return output;
     }
+    if (strlen(input) == 3 && input[0] == '\'' && input[2] == '\'') {
+        // Single character.
+        output = input[1];
+        return output;
+    }
+    // All other numbers are treated as decimal.
+    if (!sscanf(input, "%d", &output)) {
+        fprintf(stderr, "lmasm: error: invalid number: %s\n", input);
+        exit(1);
+    }
+    return output;
+}
+
+int h_expression_parser(const char *input) {
+    // Parses an (single-word) expression.
+    // Note: this is an expression either a byte or two bytes long; either
+    // a number or a label.
+    if (h_is_number(input))
+        return h_number_parser(input);
+    else
+        return h_get_label(input);
 }
 
 // End of helper functions.
@@ -610,6 +670,67 @@ void p_dir_org(int argc, char **argv) {
     h_org(h_number_parser(argv[0]));
 }
 
+void p_dir_data(int argc, char **argv) {
+    // Parser function for the .data directive.
+    // Note: the data directive can have as many arguments as needed - they are
+    // all translated into data and sequentially concatenated.
+    // Note 2: strings are expanded without the zero character at the end.
+    int data_length = 0;
+    // First determine the length of the string.
+    for (int i = 0; i < argc; i++) {
+        if (h_is_number(argv[i])) {
+            // Determine whether to parse this as a 8-bit or 16-bit number.
+            // 0xFF and less is treated as 8-bit, larger numbers are treated
+            // like 16-bit.
+            // Note: if one needs to specify a longer that 8-bit number, he
+            // would need to manually write the zeroes, like 0xff00 or 0xff, 0
+            // for 16-bit 255.
+            if ((unsigned) h_number_parser(argv[i]) <= 0xff)
+                data_length += 1;
+            else
+                data_length += 2;
+        } else if (argv[i][0] == '"' && argv[i][strlen(argv[i]) - 1] == '"') {
+            // We are parsing a string.
+            data_length += strlen(argv[i]) - 2;
+        } else {
+            // Parse as label.
+            // Note: label is an address, and therefore has two bytes.
+            data_length += 2;
+        }
+    }
+    // Then allocate the needed space, collect the data and write it.
+    char *data = calloc(sizeof(char), data_length);
+    int data_i = 0;
+    for (int i = 0; i < argc; i++) {
+        if (h_is_number(argv[i])) {
+            unsigned number = (unsigned) h_number_parser(argv[i]);
+            printf("Writing: %d\n", number);
+            if (number <= 0xff) {
+                data[data_i++] = (char) number;
+            } else {
+                // A reminder: little endian.
+                data[data_i++] = (char) number;
+                data[data_i++] = (char) (number >> 8);
+            }
+        } else if (argv[i][0] == '"' && argv[i][strlen(argv[i]) - 1] == '"') {
+            // Copy the string over.
+            for (int j = 1; j < strlen(argv[i]) - 1; j++) {
+                data[data_i++] = argv[i][j];
+                printf("Writing: %d\n", argv[i][j]);
+            }
+        } else {
+            // Label.
+            int address = h_get_label(argv[i]);
+            printf("Writing: %d\n", address);
+            data[data_i++] = (char) address;
+            data[data_i++] = (char) (address >> 8);
+        }
+    }
+
+    write_data(data, data_length);
+    free(data);
+}
+
 void p_directive_distribution(char *directive, int argc, char **argv) {
     // Calls the appropriate function representing the directive and passes it
     // the arguments.
@@ -619,7 +740,7 @@ void p_directive_distribution(char *directive, int argc, char **argv) {
     }
     
     if (strcmp(directive, ".data") == 0) {
-        //p_dir_data(argc, argv);
+        p_dir_data(argc, argv);
     } else if (strcmp(directive, ".org") == 0) {
         p_dir_org(argc, argv);
     }
@@ -781,8 +902,18 @@ int main(int argc, char **argv) {
     input_fh = fopen(input_file, "r");
     output_fh = fopen(output_file, "w");
 
-    p_line("Label: Label2: .directive ';hi:hello;', neco    , 'neco_jineho, shit' ; some comment 'blablabla''");
-    p_line("Label3: .org 0xff");
+    size_t len = 0;
+    ssize_t read = 0;
+    char *line = NULL;
+
+    while ((read = getline(&line, &len, input_fh)) != -1) {
+        // Remove newline character.
+        line[strlen(line) - 1] = '\0';
+        p_line(line);
+    }
+
+    if (line)
+        free(line);
 
     fclose(input_fh);
     fclose(output_fh);
