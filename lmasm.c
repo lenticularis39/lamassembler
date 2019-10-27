@@ -47,6 +47,7 @@ typedef int bool;
 // Maximum for operation parameters (applies both to instruction and
 // directives).
 #define PARAMETER_MAXIMUM 100
+#define D if(0)
 
 // Instruction implementation.
 
@@ -542,7 +543,7 @@ void h_org(int pos) {
     // Organization function.
     // Corresponds to: .org <pos>.
     // Meaning: set the current position (the beginning of the program) to pos.
-    printf("Org: %d\n", pos);
+    D printf("Org: %d\n", pos);
     cur_pos = pos;
 }
 
@@ -556,7 +557,7 @@ void h_label(const char *label) {
     // Corresponds to: <label>:.
     // Note: a copy of the label is made, because it is not ensured that the
     // string that the arguments points will survive outside this function.
-    printf("Recording label: %s\n", label);
+    D printf("Recording label: %s\n", label);
     char *label_perm = calloc(sizeof(char), strlen(label));
     strcpy(label_perm, label);
     label_arr[label_arr_c++].name = label_perm;
@@ -938,7 +939,7 @@ void p_dir_data(int argc, char **argv) {
     for (int i = 0; i < argc; i++) {
         if (h_is_number(argv[i])) {
             unsigned number = (unsigned) h_number_parser(argv[i]);
-            printf("Writing: %d\n", number);
+            D printf("Writing: %d\n", number);
             if (number <= 0xff) {
                 data[data_i++] = (char) number;
             } else {
@@ -950,12 +951,12 @@ void p_dir_data(int argc, char **argv) {
             // Copy the string over.
             for (int j = 1; j < strlen(argv[i]) - 1; j++) {
                 data[data_i++] = argv[i][j];
-                printf("Writing: %d\n", argv[i][j]);
+                D printf("Writing: %d\n", argv[i][j]);
             }
         } else {
             // Label.
             int address = h_get_label(argv[i]);
-            printf("Writing: %d\n", address);
+            D printf("Writing: %d\n", address);
             data[data_i++] = (char) address;
             data[data_i++] = (char) (address >> 8);
         }
@@ -968,9 +969,9 @@ void p_dir_data(int argc, char **argv) {
 void p_directive_distribution(char *directive, int argc, char **argv) {
     // Calls the appropriate function representing the directive and passes it
     // the arguments.
-    printf("Processing special directive: %s\n", directive);
+    D printf("Processing special directive: %s\n", directive);
     for (int i = 0; i < argc; i++) {
-        printf("Argument number %d: %s\n", i, argv[i]);
+        D printf("Argument number %d: %s\n", i, argv[i]);
     }
     
     if (strcmp(directive, ".data") == 0) {
@@ -984,9 +985,9 @@ void p_instruction(char *directive, int argc, char **argv) {
     // Parsers the argument of the instruction and calls the helper function to
     // process it.
     // At the end it writes the instruction to the output file.
-    printf("Processing instruction: %s\n", directive);
+    D printf("Processing instruction: %s\n", directive);
     for (int i = 0; i < argc; i++) {
-        printf("Argument number %d: %s\n", i, argv[i]);
+        D printf("Argument number %d: %s\n", i, argv[i]);
     }
 
     if (argc != 2) {
@@ -994,7 +995,7 @@ void p_instruction(char *directive, int argc, char **argv) {
         exit(1);
     }
     unsigned op = h_expression_parser(argv[1]);
-    printf("Op: %d\n", op);
+    D printf("Op: %d\n", op);
     struct instr i = h_instruction_parser(directive, argv[0], op);
     write_instr(i);
 }
