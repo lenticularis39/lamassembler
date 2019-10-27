@@ -33,9 +33,12 @@
  * either expressed or implied, of the Lamassembler project.
  */
 
+#define _GNU_SOURCE
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/types.h>
 
 char *output_file, *input_file;
 FILE *output_fh, *input_fh;
@@ -222,7 +225,7 @@ MKINST(BVC) {
 }
 
 MKINST(BVS) {
-    // Branch on Overflow Clear.
+    // Branch on Overflow Set.
     return make_instr(REL, 0x70, opr);
 }
 
@@ -320,12 +323,12 @@ MKINST(INC) {
 
 MKINST(INX) {
     // Increment Index X by One.
-    return ip_mem_to_acc(am, 0xE8, opr);
+    return make_instr(am, 0xE8, opr);
 }
 
 MKINST(INY) {
     // Increment Index Y by One.
-    return ip_mem_to_acc(am, 0xC8, opr);
+    return make_instr(am, 0xC8, opr);
 }
 
 MKINST(JMP) {
@@ -339,7 +342,7 @@ MKINST(JMP) {
 }
 
 MKINST(JSR) {
-    // Jump to New Locaino Saving Return Address.
+    // Jump to New Location Saving Return Address.
     return make_instr(HHLL, 0x20, opr);
 }
 
@@ -521,8 +524,8 @@ MKINST(TYA) {
 
 int cur_pos = 0; // Current position (in bytes) in the assembled output.
 
-void write_instr(struct instr i, FILE *f) {
-    fwrite((const void *) i.op, i.len, 1, f);
+void write_instr(struct instr i) {
+    fwrite((const void *) i.op, i.len, 1, output_fh);
     cur_pos += i.len;
 }
 
@@ -652,6 +655,237 @@ int h_expression_parser(const char *input) {
         return h_get_label(input);
 }
 
+struct instr h_instruction_parser(char *name, char *am, int arg) {
+    // Distribute using a long if-else clause into the instruction backend
+    // functions.
+    // Note: am is short for address mode.
+    // Note 2: for the meaning of the address modes, see the comments to the
+    // enum type above.
+
+    // First parse the address mode.
+    enum addr_mode ame;
+    if (strcmp(am, "acc") == 0)
+        // Accumulator mode.
+        ame = ACC;
+    else if (strcmp(am, "dir") == 0)
+        // Direct mode.
+        ame = HHLL;
+    else if (strcmp(am, "dir_x") == 0)
+        // Direct mode (x).
+        ame = HHLL_X;
+    else if (strcmp(am, "dir_y") == 0)
+        // Direct mode (y).
+        ame = HHLL_Y;
+    else if (strcmp(am, "imm") == 0)
+        // Immediate.
+        ame = IMM;
+    else if (strcmp(am, "impl") == 0)
+        // Implied.
+        ame = IMPL;
+    else if (strcmp(am, "indr") == 0)
+        // Indirect.
+        ame = INDR;
+    else if (strcmp(am, "indr_x") == 0)
+        // Indirect.
+        ame = INDR_X;
+    else if (strcmp(am, "indr_y") == 0)
+        // Indirect.
+        ame = INDR_Y;
+    else if (strcmp(am, "rel") == 0)
+        // Relative.
+        ame = REL;
+    else if (strcmp(am, "zpg") == 0)
+        // Zeropage.
+        ame = ZPG;
+    else if (strcmp(am, "zpg_x") == 0)
+        // Zeropage X.
+        ame = ZPG_X;
+    else if (strcmp(am, "zpg_y") == 0)
+        // Zeropage Y.
+        ame = ZPG_Y;
+
+    // Now create the instruction itself.
+    struct instr output;
+    if (strcmp(name, "adc") == 0)
+        // Add Memory to Accumulator with Carry.
+        output = i_ADC(ame, arg);
+    else if (strcmp(name, "and") == 0)
+        // AND Memory with Accumulator.
+        output = i_AND(ame, arg);
+    else if (strcmp(name, "asl") == 0)
+        // Shift Left One Bit (Memory or Accumulator).
+        output = i_ASL(ame, arg);
+    else if (strcmp(name, "bcc") == 0)
+        /// Branch on Carry Clear.
+        output = i_BCC(ame, arg);
+    else if (strcmp(name, "bcs") == 0)
+        // Branch on Carry Set.
+        output = i_BCS(ame, arg);
+    else if (strcmp(name, "beq") == 0)
+        // Branch on Result Zero.
+        output = i_BEQ(ame, arg);
+    else if (strcmp(name, "bit") == 0)
+        // Test Bits in Memory with Accumulator.
+        output = i_BIT(ame, arg);
+    else if (strcmp(name, "bmi") == 0)
+        // Branch on Result Minus.
+        output = i_BMI(ame, arg);
+    else if (strcmp(name, "bne") == 0)
+        // Branch on Result not Zero.
+        output = i_BNE(ame, arg);
+    else if (strcmp(name, "bpl") == 0)
+        // Branch on Result Plus.
+        output = i_BPL(ame, arg);
+    else if (strcmp(name, "brk") == 0)
+        // Force Break.
+        output = i_BRK(ame, arg);
+    else if (strcmp(name, "bvc") == 0)
+        // Branch on Overflow Clear.
+        output = i_BVC(ame, arg);
+    else if (strcmp(name, "bvs") == 0)
+        // Branch on Overflow Set.
+        output = i_BVS(ame, arg);
+    else if (strcmp(name, "clc") == 0)
+        // Clear Carry Flag.
+        output = i_CLC(ame, arg);
+    else if (strcmp(name, "cld") == 0)
+        // Clear Decimal Mode.
+        output = i_CLD(ame, arg);
+    else if (strcmp(name, "cli") == 0)
+        // Clear Interrupt Disable Bit.
+        output = i_CLI(ame, arg);
+    else if (strcmp(name, "clv") == 0)
+        // Clear Overflow Flag.
+        output = i_CLV(ame, arg);
+    else if (strcmp(name, "cmp") == 0)
+        // Compare Memory with Accumulator.
+        output = i_CMP(ame, arg);
+    else if (strcmp(name, "cpx") == 0)
+        // Compare Memory with Index X.
+        output = i_CPX(ame, arg);
+    else if (strcmp(name, "cpy") == 0)
+        // Compare Memory with Index Y.
+        output = i_CPY(ame, arg);
+    else if (strcmp(name, "dec") == 0)
+        // Decrement Memory by One.
+        output = i_DEC(ame, arg);
+    else if (strcmp(name, "dex") == 0)
+        // Decrement Index X by One.
+        output = i_DEX(ame, arg);
+    else if (strcmp(name, "dey") == 0)
+        // Decrement Index Y by One.
+        output = i_DEY(ame, arg);
+    else if (strcmp(name, "eor") == 0)
+        // Exclusive-OR Memory with Accumulator.
+        output = i_EOR(ame, arg);
+    else if (strcmp(name, "inc") == 0)
+        // Increment Memory by One.
+        output = i_INC(ame, arg);
+    else if (strcmp(name, "inx") == 0)
+        // Increment Index X by One.
+        output = i_INX(ame, arg);
+    else if (strcmp(name, "iny") == 0)
+        // Increment Index Y by One.
+        output = i_INY(ame, arg);
+    else if (strcmp(name, "jmp") == 0)
+        // Jump to New Location.
+        output = i_JMP(ame, arg);
+    else if (strcmp(name, "jsr") == 0)
+        // Jump to New Location Saving Return Address.
+        output = i_JSR(ame, arg);
+    else if (strcmp(name, "lda") == 0)
+        // Load Accumulator with Memory.
+        output = i_LDA(ame, arg);
+    else if (strcmp(name, "ldx") == 0)
+        // Load X with Memory.
+        output = i_LDX(ame, arg);
+    else if (strcmp(name, "ldy") == 0)
+        // Load Y with Memory.
+        output = i_LDY(ame, arg);
+    else if (strcmp(name, "lsr") == 0)
+        // Shift One Bit Right (Memory or Accumulator).
+        output = i_LSR(ame, arg);
+    else if (strcmp(name, "nop") == 0)
+        // No Operation.
+        output = i_NOP(ame, arg);
+    else if (strcmp(name, "ora") == 0)
+        // No Operation.
+        output = i_ORA(ame, arg);
+    else if (strcmp(name, "pha") == 0)
+        // No Operation.
+        output = i_PHA(ame, arg);
+    else if (strcmp(name, "php") == 0)
+        // No Operation.
+        output = i_PHP(ame, arg);
+    else if (strcmp(name, "pla") == 0)
+        // No Operation.
+        output = i_PLA(ame, arg);
+    else if (strcmp(name, "plp") == 0)
+        // No Operation.
+        output = i_PLP(ame, arg);
+    else if (strcmp(name, "rol") == 0)
+        // No Operation.
+        output = i_ROL(ame, arg);
+    else if (strcmp(name, "rol") == 0)
+        // No Operation.
+        output = i_ROL(ame, arg);
+    else if (strcmp(name, "ror") == 0)
+        // No Operation.
+        output = i_ROR(ame, arg);
+    else if (strcmp(name, "rti") == 0)
+        // No Operation.
+        output = i_RTI(ame, arg);
+    else if (strcmp(name, "rts") == 0)
+        // No Operation.
+        output = i_RTS(ame, arg);
+    else if (strcmp(name, "sbc") == 0)
+        // No Operation.
+        output = i_SBC(ame, arg);
+    else if (strcmp(name, "sec") == 0)
+        // No Operation.
+        output = i_SEC(ame, arg);
+    else if (strcmp(name, "sed") == 0)
+        // No Operation.
+        output = i_SED(ame, arg);
+    else if (strcmp(name, "sei") == 0)
+        // No Operation.
+        output = i_SEI(ame, arg);
+    else if (strcmp(name, "sta") == 0)
+        // No Operation.
+        output = i_STA(ame, arg);
+    else if (strcmp(name, "stx") == 0)
+        // No Operation.
+        output = i_STX(ame, arg);
+    else if (strcmp(name, "sty") == 0)
+        // No Operation.
+        output = i_STY(ame, arg);
+    else if (strcmp(name, "tax") == 0)
+        // No Operation.
+        output = i_TAX(ame, arg);
+    else if (strcmp(name, "tay") == 0)
+        // No Operation.
+        output = i_TAY(ame, arg);
+    else if (strcmp(name, "tsx") == 0)
+        // No Operation.
+        output = i_TSX(ame, arg);
+    else if (strcmp(name, "txa") == 0)
+        // No Operation.
+        output = i_TXA(ame, arg);
+    else if (strcmp(name, "txs") == 0)
+        // No Operation.
+        output = i_TXS(ame, arg);
+    else if (strcmp(name, "tya") == 0)
+        // No Operation.
+        output = i_TYA(ame, arg);
+    else {
+        fprintf(stderr, "lmasm: error: wrong instruction: %s\n", name);
+        exit(1);
+    }
+    // TODO: Add other instructions.
+
+    return output;
+}
+
 // End of helper functions.
 
 // Parser functions.
@@ -746,6 +980,25 @@ void p_directive_distribution(char *directive, int argc, char **argv) {
     }
 }
 
+void p_instruction(char *directive, int argc, char **argv) {
+    // Parsers the argument of the instruction and calls the helper function to
+    // process it.
+    // At the end it writes the instruction to the output file.
+    printf("Processing instruction: %s\n", directive);
+    for (int i = 0; i < argc; i++) {
+        printf("Argument number %d: %s\n", i, argv[i]);
+    }
+
+    if (argc != 2) {
+        fprintf(stderr, "lmasm: error: wrong number of arguments\n");
+        exit(1);
+    }
+    unsigned op = h_expression_parser(argv[1]);
+    printf("Op: %d\n", op);
+    struct instr i = h_instruction_parser(directive, argv[0], op);
+    write_instr(i);
+}
+
 void p_line(const char *line) {
     int len = strlen(line);
     char *line2 = calloc(sizeof(char), len + 1);
@@ -802,11 +1055,7 @@ void p_line(const char *line) {
         }
     }
 
-    // Now we have to check if the line represent a special assembler directive.
-    // This is checked by looking at the first character (all special directives
-    // begin with a dot).
-    // Note: we reuse the memory for line2 (which won't be used again) to
-    // contain the directive.
+    // Now we have to load the command.
     char *directive = line2;
     int directive_i = 0;
     int start = -1;
@@ -821,60 +1070,63 @@ void p_line(const char *line) {
         // Empty line.
         return;
     }
-    if (line3[start] == '.') {
-        // Special directive detected. Load its name and its parameters.
-        int i = start;
-        for (; i < strlen(line3); i++) {
-            if (line3[i] == ' ' || line3[i] == '\t') {
-                start = i;
-                directive[directive_i] = '\0';
-                break;
-            }
-            directive[directive_i++] = line3[i];
+    // Now load the command.
+    int i = start;
+    for (; i < strlen(line3); i++) {
+        if (line3[i] == ' ' || line3[i] == '\t') {
+            start = i;
+            directive[directive_i] = '\0';
+            break;
         }
-        // Now load parameters until the end of the line is reached.
-        int argc = 0;
-        char **argv = calloc(sizeof(char *), PARAMETER_MAXIMUM);
-        // Index of the end of the line.
-        const int eol = strlen(line3);
-        while (i < eol) {
-            // First skip any initial spaces.
-            while (i < eol && (line3[i] == ' ' || line3[i] == '\t'))
-                i++;
-            if (i == eol)
-                // We reached the end of the line (this "argument" contained
-                // only whitespace).
-                break;
-            // Then load the paramterer while looking for the separator (in this
-            // case a comma).
-            // Note: Again, "inside quotes" mechanism has to be used to avoid
-            // counting the separator inside a literal.
-            argv[argc] = calloc(sizeof(char), strlen(line3) + 1);
-            int argv_i = 0;
-            for (; i < eol; i++) {
-                if (line3[i] == '"' || line3[i] == '\'' &&
-                        (i == 0 || line3[i - 1] != '\\'))
-                    inside_quotes = !inside_quotes;
-                if (line3[i] == ',' && !inside_quotes) {
-                    break;
-                }
-                argv[argc][argv_i++] = line3[i];
-            }
-            // End the parameter with a zero and move the index to enable their
-            // next argument to be loaded. (Otherwise the next iteration of the
-            // cycle would see the comma and load an empty argument).
-            argv[argc][argv_i] = '\0';
-            ++argc; ++i;
-        }
-        // Process the directive and free argv.
-        // Note: we do not need to free the variable directive, because it uses
-        // the same address space as line2, which is freed at the end of the
-        // function.
-        p_directive_distribution(directive, argc, argv);
-        for (int j = 0; i < argc; i++)
-            free(argv[j]);
-        free(argv);
+        directive[directive_i++] = line3[i];
     }
+    // Now load parameters until the end of the line is reached.
+    int argc = 0;
+    char **argv = calloc(sizeof(char *), PARAMETER_MAXIMUM);
+    // Index of the end of the line.
+    const int eol = strlen(line3);
+    while (i < eol) {
+        // First skip any initial spaces.
+        while (i < eol && (line3[i] == ' ' || line3[i] == '\t'))
+            i++;
+        if (i == eol)
+            // We reached the end of the line (this "argument" contained
+            // only whitespace).
+            break;
+        // Then load the paramterer while looking for the separator (in this
+        // case a comma).
+        // Note: Again, "inside quotes" mechanism has to be used to avoid
+        // counting the separator inside a literal.
+        argv[argc] = calloc(sizeof(char), strlen(line3) + 1);
+        int argv_i = 0;
+        for (; i < eol; i++) {
+            if (line3[i] == '"' || line3[i] == '\'' &&
+                    (i == 0 || line3[i - 1] != '\\'))
+                inside_quotes = !inside_quotes;
+            if (line3[i] == ',' && !inside_quotes) {
+                break;
+            }
+            argv[argc][argv_i++] = line3[i];
+        }
+        // End the parameter with a zero and move the index to enable their
+        // next argument to be loaded. (Otherwise the next iteration of the
+        // cycle would see the comma and load an empty argument).
+        argv[argc][argv_i] = '\0';
+        ++argc; ++i;
+    }
+    // Process the command and free argv.
+    // Note: we do not need to free the variable directive, because it uses
+    // the same address space as line2, which is freed at the end of the
+    // function.
+    if (directive[0] == '.')
+        // Command starts with ., therefore it is a directive.
+        p_directive_distribution(directive, argc, argv);
+    else
+        // Instruction.
+        p_instruction(directive, argc, argv);
+    for (int j = 0; i < argc; i++)
+        free(argv[j]);
+    free(argv);
 
     free(line2);
     free(line3);
