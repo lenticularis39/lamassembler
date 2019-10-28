@@ -1046,6 +1046,7 @@ void p_line(const char *line) {
             // We don't want to include the label into line3, therefore shift
             // the line3 index back.
             line3_index -= skip_index;
+            line3[line3_index] = '\0';
             skip_index = 0;
         } else {
             if (line2[i] != ' ' && line2[i] != '\t' && !inside_quotes) {
