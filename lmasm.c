@@ -44,10 +44,30 @@ char *output_file, *input_file;
 FILE *output_fh, *input_fh;
 
 typedef int bool;
+
 // Maximum for operation parameters (applies both to instruction and
 // directives).
 #define PARAMETER_MAXIMUM 100
 #define D if(0)
+
+// Error handling functions.
+
+int processed_line;
+
+// Buffer to temporarily hold error messages.
+char *error_buffer;
+
+void exit_with_error(const char *error) {
+    void p_cleanup();
+
+    printf("lmasm: error: line %d: %s\n", processed_line, error);
+    fclose(input_fh);
+    fclose(output_fh);
+    p_cleanup();
+    exit(1);
+}
+
+// End of error handling functions.
 
 // Instruction implementation.
 
@@ -138,6 +158,8 @@ struct instr ip_mem_to_acc(enum addr_mode am, unsigned char opt, unsigned opr) {
             return make_instr(am, opt + 0x01, opr);
         case INDR_Y:
             return make_instr(am, opt + 0x11, opr);
+        default:
+            exit_with_error("invalid address mode");
     }
 }
 
@@ -155,6 +177,8 @@ struct instr ip_mem_or_acc(enum addr_mode am, unsigned char opt, unsigned opr) {
             return make_instr(am, opt + 0x0E, opr);
         case HHLL_X:
             return make_instr(am, opt + 0x1E, opr);
+        default:
+            exit_with_error("invalid address mode");
     }
 }
 
@@ -197,56 +221,78 @@ MKINST(BIT) {
             return make_instr(am, 0x24, opr);
         case HHLL:
             return make_instr(am, 0x2C, opr);
+        default:
+            exit_with_error("invalid address mode");
     }
 }
 
 MKINST(BMI) {
     // Branch on Result Minus.
+    if (am != REL)
+        exit_with_error("invalid address mode");
     return make_instr(REL, 0x30, opr);
 }
 
 MKINST(BNE) {
     // Branch on Result not Zero.
+    if (am != REL)
+        exit_with_error("invalid address mode");
     return make_instr(REL, 0xD0, opr);
 }
 
 MKINST(BPL) {
     // Branch on Result Plus.
+    if (am != REL)
+        exit_with_error("invalid address mode");
     return make_instr(REL, 0x10, opr);
 }
 
 MKINST(BRK) {
     // Force Break.
+    if (am != IMPL)
+        exit_with_error("invalid address mode");
     return make_instr(IMPL, 0x00, 0);
 }
 
 MKINST(BVC) {
     // Branch on Overflow Clear.
+    if (am != REL)
+        exit_with_error("invalid address mode");
     return make_instr(REL, 0x50, opr);
 }
 
 MKINST(BVS) {
     // Branch on Overflow Set.
+    if (am != REL)
+        exit_with_error("invalid address mode");
     return make_instr(REL, 0x70, opr);
 }
 
 MKINST(CLC) {
     // Clear Carry Flag.
+    if (am != IMPL)
+        exit_with_error("invalid address mode");
     return make_instr(IMPL, 0x18, 0);
 }
 
 MKINST(CLD) {
     // Clear Decimal Mode.
+    if (am != IMPL)
+        exit_with_error("invalid address mode");
     return make_instr(IMPL, 0x18, 0);
 }
 
 MKINST(CLI) {
     // Clear Interrupt Disable Bit.
+    if (am != IMPL)
+        exit_with_error("invalid address mode");
     return make_instr(IMPL, 0x58, 0);
 }
 
 MKINST(CLV) {
     // Clear Overflow Flag.
+    if (am != IMPL)
+        exit_with_error("invalid address mode");
     return make_instr(IMPL, 0xB8, 0);
 }
 
@@ -264,6 +310,8 @@ MKINST(CPX) {
             return make_instr(am, 0xE4, opr);
         case HHLL:
             return make_instr(am, 0xEC, opr);
+        default:
+            exit_with_error("invalid address mode");
     }
 }
 
@@ -276,6 +324,8 @@ MKINST(CPY) {
             return make_instr(am, 0xC4, opr);
         case HHLL:
             return make_instr(am, 0xCC, opr);
+        default:
+            exit_with_error("invalid address mode");
     }
 }
 
@@ -290,16 +340,22 @@ MKINST(DEC) {
             return make_instr(am, 0xCE, opr);
         case HHLL_X:
             return make_instr(am, 0xDE, opr);
+        default:
+            exit_with_error("invalid address mode");
     }
 }
 
 MKINST(DEX) {
     // Decrement Index X by One.
+    if (am != IMPL)
+        exit_with_error("invalid address mode");
     return make_instr(am, 0xCA, opr);
 }
 
 MKINST(DEY) {
     // Decrement Index Y by One.
+    if (am != IMPL)
+        exit_with_error("invalid address mode");
     return make_instr(am, 0x88, opr);
 }
 
@@ -319,16 +375,22 @@ MKINST(INC) {
             return make_instr(am, 0xEE, opr);
         case HHLL_X:
             return make_instr(am, 0xFE, opr);
+        default:
+            exit_with_error("invalid address mode");
     }
 }
 
 MKINST(INX) {
     // Increment Index X by One.
+    if (am != IMPL)
+        exit_with_error("invalid address mode");
     return make_instr(am, 0xE8, opr);
 }
 
 MKINST(INY) {
     // Increment Index Y by One.
+    if (am != IMPL)
+        exit_with_error("invalid address mode");
     return make_instr(am, 0xC8, opr);
 }
 
@@ -339,11 +401,15 @@ MKINST(JMP) {
             return make_instr(am, 0x4C, opr);
         case INDR:
             return make_instr(am, 0x6C, opr);
+        default:
+            exit_with_error("invalid address mode");
     }
 }
 
 MKINST(JSR) {
     // Jump to New Location Saving Return Address.
+    if (am != HHLL)
+        exit_with_error("invalid address mode");
     return make_instr(HHLL, 0x20, opr);
 }
 
@@ -365,6 +431,8 @@ MKINST(LDX) {
             return make_instr(am, 0xAE, opr);
         case HHLL_Y:
             return make_instr(am, 0xBE, opr);
+        default:
+            exit_with_error("invalid address mode");
     }
 }
 
@@ -381,6 +449,8 @@ MKINST(LDY) {
             return make_instr(am, 0xAC, opr);
         case HHLL_X:
             return make_instr(am, 0xBC, opr);
+        default:
+            exit_with_error("invalid address mode");
     }
 }
 
@@ -391,6 +461,8 @@ MKINST(LSR) {
 
 MKINST(NOP) {
     // No Operation.
+    if (am != IMPL)
+        exit_with_error("invalid address mode");
     return make_instr(IMPL, 0xEA, 0);
 }
 
@@ -401,21 +473,29 @@ MKINST(ORA) {
 
 MKINST(PHA) {
     // Push Accumulator on Stack.
+    if (am != IMPL)
+        exit_with_error("invalid address mode");
     return make_instr(IMPL, 0x48, 0);
 }
 
 MKINST(PHP) {
     // Push Processor Status on Stack.
+    if (am != IMPL)
+        exit_with_error("invalid address mode");
     return make_instr(IMPL, 0x08, 0);
 }
 
 MKINST(PLA) {
     // Pull Accumulator from Stack.
+    if (am != IMPL)
+        exit_with_error("invalid address mode");
     return make_instr(IMPL, 0x68, 0);
 }
 
 MKINST(PLP) {
     // Push Processor Status from Stack.
+    if (am != IMPL)
+        exit_with_error("invalid address mode");
     return make_instr(IMPL, 0x28, 0);
 }
 
@@ -431,11 +511,15 @@ MKINST(ROR) {
 
 MKINST(RTI) {
     // Return from Interrupt.
+    if (am != IMPL)
+        exit_with_error("invalid address mode");
     return make_instr(IMPL, 0x40, opr);
 }
 
 MKINST(RTS) {
     // Return from Subroutine.
+    if (am != IMPL)
+        exit_with_error("invalid address mode");
     return make_instr(IMPL, 0x60, opr);
 }
 
@@ -446,17 +530,23 @@ MKINST(SBC) {
 
 MKINST(SEC) {
     // Set Carry Flag.
+    if (am != IMPL)
+        exit_with_error("invalid address mode");
     return make_instr(IMPL, 0x38, opr);
 }
 
 
 MKINST(SED) {
     // Set Decimal Flag.
+    if (am != IMPL)
+        exit_with_error("invalid address mode");
     return make_instr(IMPL, 0xF8, opr);
 }
 
 MKINST(SEI) {
     // Set Interrupt Disable Status
+    if (am != IMPL)
+        exit_with_error("invalid address mode");
     return make_instr(IMPL, 0x78, opr);
 }
 
@@ -474,6 +564,8 @@ MKINST(STX) {
             return make_instr(am, 0x96, opr);
         case HHLL:
             return make_instr(am, 0x8E, opr);
+        default:
+            exit_with_error("invalid address mode");
     }
 }
 
@@ -486,36 +578,50 @@ MKINST(STY) {
             return make_instr(am, 0x94, opr);
         case HHLL:
             return make_instr(am, 0x8C, opr);
+        default:
+            exit_with_error("invalid address mode");
     }
 }
 
 MKINST(TAX) {
     // Transfer Accumulator to Index X.
+    if (am != IMPL)
+        exit_with_error("invalid address mode");
     return make_instr(IMPL, 0xAA, opr);
 }
 
 MKINST(TAY) {
     // Transfer Accumulator to Index Y.
+    if (am != IMPL)
+        exit_with_error("invalid address mode");
     return make_instr(IMPL, 0xA8, opr);
 }
 
 MKINST(TSX) {
     // Transfer Stack Pointer to Index X.
+    if (am != IMPL)
+        exit_with_error("invalid address mode");
     return make_instr(IMPL, 0xBA, opr);
 }
 
 MKINST(TXA) {
     // Transfer Index X to Accumulator.
+    if (am != IMPL)
+        exit_with_error("invalid address mode");
     return make_instr(IMPL, 0x8A, opr);
 }
 
 MKINST(TXS) {
     // Transfer Index X to Stack Register.
+    if (am != IMPL)
+        exit_with_error("invalid address mode");
     return make_instr(IMPL, 0x9A, opr);
 }
 
 MKINST(TYA) {
     // Transfer Index Y to Accumulator.
+    if (am != IMPL)
+        exit_with_error("invalid address mode");
     return make_instr(IMPL, 0x98, opr);
 }
 
@@ -613,23 +719,22 @@ int h_is_number(const char *input) {
 int h_number_parser(const char *input) {
     int output;
     if (!h_is_number(input)) {
-        fprintf(stderr, "lmasm: error: number expected, got %s instead\n",
-                input);
-        exit(1);
+        sprintf(error_buffer, "number expected, got %s instead", input);
+        exit_with_error(error_buffer);
     }
     if (strlen(input) >= 2 && input[0] == '0' && input[1] == 'x') {
         // Numbers beginning with 0x are treated as hexadecimal.
         if (!sscanf(input + 2, "%x", &output)) {
-            fprintf(stderr, "lmasm: error: invalid number: %s\n", input);
-            exit(1);
+            sprintf(error_buffer, "invalid number: %s", input);
+            exit_with_error(error_buffer);
         }
         return output;
     }
     if (strlen(input) >= 2 && input[0] == '0') {
         // Numbers beginning with 0 are treated as octal.
         if (!sscanf(input, "%o", &output)) {
-            fprintf(stderr, "lmasm: error: invalid number: %s\n", input);
-            exit(1);
+            sprintf(error_buffer, "invalid number: %s", input);
+            exit_with_error(error_buffer);
         }
         return output;
     }
@@ -879,10 +984,9 @@ struct instr h_instruction_parser(char *name, char *am, int arg) {
         // No Operation.
         output = i_TYA(ame, arg);
     else {
-        fprintf(stderr, "lmasm: error: wrong instruction: %s\n", name);
-        exit(1);
+        sprintf(error_buffer, "wrong instruction: %s", name);
+        exit_with_error(error_buffer);
     }
-    // TODO: Add other instructions.
 
     return output;
 }
@@ -891,16 +995,10 @@ struct instr h_instruction_parser(char *name, char *am, int arg) {
 
 // Parser functions.
 
-int line_n; // Used only for the purpose of debugging messages.
-
 void p_dir_org(int argc, char **argv) {
     // Parser function for .org directive.
-    if (argc != 1) {
-        fprintf(stderr, 
-                "lmasm: error: incorrect number of arguments to .org\n");
-        exit(1);
-    }
-
+    if (argc != 1)
+        exit_with_error("incorrect number of arguments to .org");
     // Call the appropriate helper functions. (Parse the argument first.)
     h_org(h_number_parser(argv[0]));
 }
@@ -973,7 +1071,7 @@ void p_directive_distribution(char *directive, int argc, char **argv) {
     for (int i = 0; i < argc; i++) {
         D printf("Argument number %d: %s\n", i, argv[i]);
     }
-    
+
     if (strcmp(directive, ".data") == 0) {
         p_dir_data(argc, argv);
     } else if (strcmp(directive, ".org") == 0) {
@@ -990,11 +1088,20 @@ void p_instruction(char *directive, int argc, char **argv) {
         D printf("Argument number %d: %s\n", i, argv[i]);
     }
 
-    if (argc != 2) {
-        fprintf(stderr, "lmasm: error: wrong number of arguments\n");
-        exit(1);
+    if (argc > 2)
+        exit_with_error("wrong number of arguments");
+
+    unsigned op;
+    if (argc > 1) {
+        // Operand specified.
+        op = h_expression_parser(argv[1]);
+    } else {
+        // Operand unspecified. Check if the instruction's address mode is
+        // implied. If not, throw an error.
+        if (strcmp(argv[0], "impl") != 0)
+            exit_with_error("wrong number of arguments");
     }
-    unsigned op = h_expression_parser(argv[1]);
+
     D printf("Op: %d\n", op);
     struct instr i = h_instruction_parser(directive, argv[0], op);
     write_instr(i);
@@ -1020,10 +1127,8 @@ void p_line(const char *line) {
             line2[i] = line[i];
     }
 
-    if (inside_quotes) {
-        fprintf(stderr, "lmasm: error: line %d: wrong quote pairing\n", line_n);
-        exit(1);
-    }
+    if (inside_quotes)
+        exit_with_error("wrong quote pairing");
 
     // Then process any labels on the line. (Also skip any whitespace.)
     char *label = calloc(sizeof(char), len + 1);
@@ -1140,6 +1245,9 @@ void p_cleanup() {
     for (int i = 0; i < label_arr_c; i++) {
         free(label_arr[i].name);
     }
+
+    // Free the error buffer.
+    free(error_buffer);
 }
 
 // End of parser functions.
@@ -1156,6 +1264,8 @@ int main(int argc, char **argv) {
     input_fh = fopen(input_file, "r");
     output_fh = fopen(output_file, "w");
 
+    error_buffer = calloc(sizeof(char), 100);
+
     size_t len = 0;
     ssize_t read = 0;
     char *line = NULL;
@@ -1163,6 +1273,7 @@ int main(int argc, char **argv) {
     while ((read = getline(&line, &len, input_fh)) != -1) {
         // Remove newline character.
         line[strlen(line) - 1] = '\0';
+        processed_line += 1;
         p_line(line);
     }
 
